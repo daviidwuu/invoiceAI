@@ -1,0 +1,18 @@
+{
+  "vendors": {
+    "acme-001": {
+      "name": "Acme Corporation",
+      "confidence": 0.95,
+      "address": "123 Industry Way, Springfield",
+      "contact_email": "billing@acme.test",
+      "code": "ACM"
+    },
+    "globex-002": {
+      "name": "Globex Corporation",
+      "confidence": 0.9,
+      "address": "456 Commerce Blvd, Metropolis",
+      "contact_email": "invoices@globex.test",
+      "code": "GLOB"
+    }
+  }
+}
