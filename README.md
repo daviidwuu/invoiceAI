@@ -8,6 +8,7 @@ InvoiceAI is a desktop workflow for extracting data from invoice PDFs, parsing k
 - **Local Parsing** – Runs configurable local NLP models or rule-based heuristics to detect entities, provide reasoning metadata, and manage confidence scoring.
 - **Google Sheets Sync** – Authenticates with a service account, enforces UID uniqueness, applies locking, and retries operations to handle API quotas.
 - **Feedback-Driven Training** – Stores feedback in JSONL, logs training runs, and versions incremental models.
+- **Rich GUI & CLI** – PySide6 interface for visual workflows plus a headless CLI that outputs tab-separated invoice rows for spreadsheet ingestion.
 - **Rich GUI** – PySide6 interface with Dashboard, Settings, and Training tabs that surface confidence information and explainability context.
 
 ## Repository Structure
