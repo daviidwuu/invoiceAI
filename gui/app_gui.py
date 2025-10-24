@@ -205,9 +205,6 @@ class InvoiceMainWindow(QMainWindow):  # pragma: no cover - GUI class
             ("Invoice ID", parse_result.invoice_id),
             ("Invoice Date", parse_result.invoice_date),
             ("Total", parse_result.total),
-            ("Address", parse_result.address),
-            ("Description", parse_result.description),
-            ("Project Code", parse_result.project_code),
         ]
         for label, field in fields:
             if field:

@@ -15,11 +15,6 @@ except ImportError:  # pragma: no cover - optional dependency
     pdfplumber = None
 
 try:
-    from pypdf import PdfReader  # type: ignore
-except ImportError:  # pragma: no cover - optional dependency
-    PdfReader = None
-
-try:
     from pdf2image import convert_from_path  # type: ignore
 except ImportError:  # pragma: no cover - optional dependency
     convert_from_path = None
@@ -121,11 +116,7 @@ class Extractor:
                 )
                 ocr_used = True
 
-        if not pages and not ocr_used:
-            logger.info("Falling back to PyPDF text extraction", path=str(pdf_path))
-            pages = self._extract_with_pypdf(pdf_path)
-
-        if force_ocr or ocr_used or not pages:
+        if force_ocr or (not pages and ocr_used):
             logger.info("Performing OCR on PDF", path=str(pdf_path))
             pages = self._extract_with_ocr(pdf_path)
             ocr_used = True
@@ -167,24 +158,6 @@ class Extractor:
         except Exception as exc:  # pragma: no cover - integration path
             logger.exception("Failed to extract with pdfplumber", error=str(exc))
             return []
-
-    def _extract_with_pypdf(self, pdf_path: Path) -> List[Dict[str, object]]:
-        if PdfReader is None:
-            logger.warning("PyPDF is not installed; skipping fallback text extraction")
-            return []
-        try:
-            reader = PdfReader(str(pdf_path))
-        except Exception as exc:  # pragma: no cover - integration path
-            logger.exception("Unable to open PDF with PyPDF", error=str(exc))
-            return []
-        pages: List[Dict[str, object]] = []
-        for index, page in enumerate(reader.pages):
-            try:
-                text = page.extract_text() or ""
-            except Exception as exc:  # pragma: no cover - integration path
-                logger.exception("PyPDF failed to extract text", page=index, error=str(exc))
-                text = ""
-            pages.append({"index": index, "text": text, "words": [], "confidence": 0.5})
         return pages
 
     def _extract_with_ocr(self, pdf_path: Path) -> List[Dict[str, object]]:

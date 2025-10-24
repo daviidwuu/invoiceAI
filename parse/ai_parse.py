@@ -6,7 +6,7 @@ import json
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Dict, List, Optional
 
 from loguru import logger
 
@@ -23,7 +23,6 @@ class ParsedField:
     confidence: float
     source: str
     reasoning: str
-    metadata: Dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -32,9 +31,6 @@ class ParseResult:
     invoice_id: Optional[ParsedField]
     invoice_date: Optional[ParsedField]
     total: Optional[ParsedField]
-    address: Optional[ParsedField] = None
-    description: Optional[ParsedField] = None
-    project_code: Optional[ParsedField] = None
     line_items: List[Dict[str, str]] = field(default_factory=list)
     additional_entities: List[ParsedField] = field(default_factory=list)
     reasoning_steps: List[Dict[str, str]] = field(default_factory=list)
@@ -46,9 +42,6 @@ class ParseResult:
                 "invoice_id": self.invoice_id.__dict__ if self.invoice_id else None,
                 "invoice_date": self.invoice_date.__dict__ if self.invoice_date else None,
                 "total": self.total.__dict__ if self.total else None,
-                "address": self.address.__dict__ if self.address else None,
-                "description": self.description.__dict__ if self.description else None,
-                "project_code": self.project_code.__dict__ if self.project_code else None,
                 "line_items": self.line_items,
                 "additional_entities": [field.__dict__ for field in self.additional_entities],
                 "reasoning_steps": self.reasoning_steps,
@@ -110,20 +103,22 @@ class InvoiceParser:
         self._load_model()
         text = "\n".join(page.get("text", "") for page in extraction_result.pages)
         reasoning_steps: List[Dict[str, str]] = []
-        vendor_field = self._match_known_entity(text, reasoning_steps)
-        invoice_id_field = self._regex_extract(
-            text, r"invoice\s*(?:number|no\.?|#)\s*[:#-]?\s*([\w-]+)", "Invoice number"
-        )
-        invoice_date_field = self._regex_extract(
-            text,
-            r"(?:invoice\s*)?(?:date)\s*[:#-]?\s*([0-9]{1,2}[\-/][0-9]{1,2}[\-/][0-9]{2,4})",
-            "Invoice date",
-        )
-        total_field = self._regex_extract(
-            text,
-            r"total\s*(?:due|amount)?\s*[:#-]?\s*([$€£]?\s?[0-9,.]+)",
-            "Total amount",
-        )
+        parsed_fields = {
+            "vendor": self._match_known_entity(text, reasoning_steps),
+            "invoice_id": self._regex_extract(
+                text, r"invoice\s*(?:number|no\.?|#)\s*[:#-]?\s*(\w+)", "Invoice number"
+            ),
+            "invoice_date": self._regex_extract(
+                text,
+                r"(?:invoice\s*)?(?:date)\s*[:#-]?\s*([0-9]{1,2}[\-/][0-9]{1,2}[\-/][0-9]{2,4})",
+                "Invoice date",
+            ),
+            "total": self._regex_extract(
+                text,
+                r"total\s*(?:due|amount)?\s*[:#-]?\s*([$€£]?\s?[0-9,.]+)",
+                "Total amount",
+            ),
+        }
 
         if self._nlp is not None:
             doc = self._nlp(text)
@@ -132,18 +127,12 @@ class InvoiceParser:
             additional_entities = []
 
         line_items = self._extract_line_items(text, reasoning_steps)
-        address_field = self._extract_address(text, vendor_field, reasoning_steps)
-        description_field = self._extract_description(text, line_items, reasoning_steps)
-        project_code_field = self._derive_project_code(vendor_field, reasoning_steps)
 
         result = ParseResult(
-            vendor=vendor_field,
-            invoice_id=invoice_id_field,
-            invoice_date=invoice_date_field,
-            total=total_field,
-            address=address_field,
-            description=description_field,
-            project_code=project_code_field,
+            vendor=parsed_fields["vendor"],
+            invoice_id=parsed_fields["invoice_id"],
+            invoice_date=parsed_fields["invoice_date"],
+            total=parsed_fields["total"],
             line_items=line_items,
             additional_entities=additional_entities,
             reasoning_steps=reasoning_steps,
@@ -166,14 +155,12 @@ class InvoiceParser:
                     }
                 )
                 confidence = float(vendor.get("confidence", 0.9))
-                metadata = {"vendor_id": uid, **{k: v for k, v in vendor.items() if k != "name"}}
                 return ParsedField(
                     name="vendor",
                     value=name,
                     confidence=confidence,
                     source="known_entity",
                     reasoning=f"Matched known vendor {name}",
-                    metadata=metadata,
                 )
         return None
 
@@ -194,130 +181,6 @@ class InvoiceParser:
             confidence=round(confidence, 2),
             source="regex",
             reasoning=reasoning,
-        )
-
-    def _extract_address(
-        self,
-        text: str,
-        vendor_field: Optional[ParsedField],
-        reasoning_steps: List[Dict[str, str]],
-    ) -> Optional[ParsedField]:
-        if vendor_field and vendor_field.metadata.get("address"):
-            address = str(vendor_field.metadata["address"])
-            reasoning_steps.append(
-                {
-                    "field": "address",
-                    "method": "known-entity",
-                    "detail": "Using address stored for vendor",
-                }
-            )
-            return ParsedField(
-                name="address",
-                value=address,
-                confidence=min(0.99, vendor_field.confidence + 0.05),
-                source="known_entity",
-                reasoning="Retrieved address from known vendor metadata",
-                metadata={"vendor_id": vendor_field.metadata.get("vendor_id")},
-            )
-
-        candidate_lines: List[str] = []
-        street_pattern = re.compile(
-            r"\b(street|st\.?|road|rd\.?|avenue|ave\.?|boulevard|blvd\.?|suite|ste\.?|#)\b",
-            flags=re.IGNORECASE,
-        )
-        for line in text.splitlines():
-            cleaned = line.strip()
-            if not cleaned:
-                continue
-            if street_pattern.search(cleaned) and any(char.isdigit() for char in cleaned):
-                candidate_lines.append(cleaned)
-        if not candidate_lines:
-            return None
-        best_line = max(candidate_lines, key=len)
-        reasoning_steps.append(
-            {
-                "field": "address",
-                "method": "heuristic",
-                "detail": f"Selected address-like line '{best_line}'",
-            }
-        )
-        return ParsedField(
-            name="address",
-            value=best_line,
-            confidence=0.7,
-            source="heuristic",
-            reasoning="Detected postal address pattern in document text",
-        )
-
-    def _extract_description(
-        self,
-        text: str,
-        line_items: List[Dict[str, str]],
-        reasoning_steps: List[Dict[str, str]],
-    ) -> Optional[ParsedField]:
-        if line_items:
-            description = line_items[0]["description"].strip()
-            reasoning_steps.append(
-                {
-                    "field": "description",
-                    "method": "line-item",
-                    "detail": "Using first line item description",
-                }
-            )
-            return ParsedField(
-                name="description",
-                value=description,
-                confidence=0.75,
-                source="line_item",
-                reasoning="Pulled description from first detected line item",
-            )
-
-        keywords = ["repair", "service", "subscription", "maintenance"]
-        for line in text.splitlines():
-            cleaned = line.strip()
-            if not cleaned:
-                continue
-            if any(word in cleaned.lower() for word in keywords):
-                reasoning_steps.append(
-                    {
-                        "field": "description",
-                        "method": "keyword",
-                        "detail": f"Detected description keyword in '{cleaned}'",
-                    }
-                )
-                return ParsedField(
-                    name="description",
-                    value=cleaned,
-                    confidence=0.6,
-                    source="keyword",
-                    reasoning="Selected line containing service keyword",
-                )
-        return None
-
-    def _derive_project_code(
-        self,
-        vendor_field: Optional[ParsedField],
-        reasoning_steps: List[Dict[str, str]],
-    ) -> Optional[ParsedField]:
-        if not vendor_field:
-            return None
-        code = vendor_field.metadata.get("code")
-        if not code:
-            return None
-        reasoning_steps.append(
-            {
-                "field": "project_code",
-                "method": "known-entity",
-                "detail": "Using vendor-specific project code",
-            }
-        )
-        return ParsedField(
-            name="project_code",
-            value=str(code),
-            confidence=min(0.99, vendor_field.confidence + 0.05),
-            source="known_entity",
-            reasoning="Retrieved project code from vendor metadata",
-            metadata={"vendor_id": vendor_field.metadata.get("vendor_id")},
         )
 
     def _extract_from_model(

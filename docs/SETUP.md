@@ -30,7 +30,7 @@ Set `TESSDATA_PREFIX` if Tesseract data files are stored in a non-standard locat
 
 ## Running Headless
 
-For environments without a display server, run the CLI directly (`python main.py path/to/invoice.pdf`) or, if you need the GUI, start it with a virtual framebuffer (`xvfb-run python main.py --gui`). You can also reuse the `invoice_processor.InvoiceProcessor` class inside custom automation scripts.
+For environments without a display server, start the application with a virtual framebuffer (`xvfb-run python main.py`) or run extraction/parsing via custom scripts that reuse the `extract` and `parse` packages directly.
 
 ## Troubleshooting
 

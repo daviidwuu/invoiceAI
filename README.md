@@ -9,6 +9,7 @@ InvoiceAI is a desktop workflow for extracting data from invoice PDFs, parsing k
 - **Google Sheets Sync** – Authenticates with a service account, enforces UID uniqueness, applies locking, and retries operations to handle API quotas.
 - **Feedback-Driven Training** – Stores feedback in JSONL, logs training runs, and versions incremental models.
 - **Rich GUI & CLI** – PySide6 interface for visual workflows plus a headless CLI that outputs tab-separated invoice rows for spreadsheet ingestion.
+- **Rich GUI** – PySide6 interface with Dashboard, Settings, and Training tabs that surface confidence information and explainability context.
 
 ## Repository Structure
 
@@ -48,17 +49,11 @@ sample_assets/         # Example PDFs for testing
    - Copy `config/credentials_template.json` to `config/credentials.json` and populate it with your Google Cloud service account details.
    - Share the target spreadsheet with the service-account email address.
 
-4. **Run the tool.**
-   - **CLI (default):**
-     ```bash
-     python main.py sample_assets/sample_invoice.pdf --emit-json
-     ```
-     The CLI prints the tab-separated row (e.g. `09/15/2025\t2025091502201\t...`) and, when `--emit-json` is supplied, a structured JSON payload for auditing.
-   - **GUI:**
-     ```bash
-     python main.py --gui
-     ```
-     Launches the PySide6 dashboard so you can pick PDFs, inspect reasoning, and submit feedback.
+4. **Launch the application.**
+   ```bash
+   python main.py
+   ```
+   The GUI will open with Dashboard, Settings, and Training tabs. Load a PDF using the Dashboard to run extraction and parsing.
 
 ## Sample Data
 
